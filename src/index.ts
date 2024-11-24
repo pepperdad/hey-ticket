@@ -18,20 +18,22 @@ export default {
 
     slackApp.event("message", async ({ context, payload }) => {
       if (payload.subtype === undefined) {
-        const { channel, thread_ts } = payload;
+        const { channel, user, thread_ts } = payload;
 
         if (thread_ts) {
-          await context.client.chat.postMessage({
+          await context.client.chat.postEphemeral({
             channel,
             text: `<@${payload.user}>! 스레드 메시지를 받았습니다.`,
+            user,
             thread_ts,
           });
         } else {
           const messageText = payload.text;
           if (messageText) {
-            await context.client.chat.postMessage({
+            await context.client.chat.postEphemeral({
               channel,
               text: `<@${payload.user}>! 채널 메시지를 받았습니다.`,
+              user,
             });
           }
         }
