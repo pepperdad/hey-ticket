@@ -1,9 +1,64 @@
-import { Hono } from 'hono'
+import { Hono } from "hono";
+import { SlackApp, SlackEdgeAppEnv } from "slack-cloudflare-workers";
 
-const app = new Hono<{ Bindings: CloudflareBindings }>()
+export default {
+  async fetch(
+    request: Request,
+    env: SlackEdgeAppEnv,
+    ctx: ExecutionContext
+  ): Promise<Response> {
+    const slackApp = new SlackApp({
+      env: {
+        SLACK_SIGNING_SECRET: env.SLACK_SIGNING_SECRET,
+        SLACK_BOT_TOKEN: env.SLACK_BOT_TOKEN,
+      },
+    });
 
-app.get('/', (c) => {
-  return c.text('Hello Hono!')
-})
+    const server = new Hono();
 
-export default app
+    slackApp.event("message", async ({ context, payload }) => {
+      if (payload.subtype === undefined) {
+        const { channel, thread_ts } = payload;
+
+        if (thread_ts) {
+          await context.client.chat.postMessage({
+            channel,
+            text: `<@${payload.user}>! 스레드 메시지를 받았습니다.`,
+            thread_ts,
+          });
+        } else {
+          const messageText = payload.text;
+          if (messageText) {
+            await context.client.chat.postMessage({
+              channel,
+              text: `<@${payload.user}>! 채널 메시지를 받았습니다.`,
+            });
+          }
+        }
+      }
+    });
+
+    server.all("/*", async (c) => {
+      console.log("log in", c);
+      const rawRequest = c.req.raw;
+
+      if (!rawRequest.body) {
+        console.error("Request body is null or undefined.");
+        return c.json({ error: "Request body is required" }, 400);
+      }
+
+      const [stream1, stream2] = rawRequest.body.tee();
+
+      const clonedRequest = new Request(rawRequest, { body: stream1 });
+
+      return slackApp.run(clonedRequest, c.executionCtx);
+    });
+
+    server.onError((err, c) => {
+      console.error("Error occurred:", err);
+      return c.json({ error: err.message }, 500);
+    });
+
+    return server.fetch(request, env, ctx);
+  },
+};
