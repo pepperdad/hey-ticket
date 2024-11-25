@@ -1,12 +1,9 @@
 import { Hono } from "hono";
+import { Kysely } from "kysely";
+import { D1Dialect } from "kysely-d1";
 import { SlackApp } from "slack-cloudflare-workers";
+import { Repository } from "./repository";
 import { SlackMessageService } from "./service";
-
-interface Env {
-  SLACK_SIGNING_SECRET: string;
-  SLACK_BOT_TOKEN: string;
-  EMOJI: string;
-}
 
 export default {
   async fetch(
@@ -23,7 +20,18 @@ export default {
 
     const server = new Hono();
 
-    const service = new SlackMessageService(slackApp.client, env.EMOJI);
+    const db = new Kysely<Database>({
+      dialect: new D1Dialect({
+        database: env.DB,
+      }),
+    });
+
+    const repository = new Repository(db, env.DAILY_LIMIT);
+    const service = new SlackMessageService(
+      slackApp.client,
+      env.EMOJI,
+      repository
+    );
 
     slackApp.event("message", async ({ context, payload }) => {
       if (payload.subtype === undefined) {
@@ -34,19 +42,14 @@ export default {
     });
 
     server.all("/*", async (c) => {
-      console.log("log in", c.req.json());
-      const rawRequest = c.req.raw;
+      const request = c.req.raw;
 
-      if (!rawRequest.body) {
+      if (!request.body) {
         console.error("Request body is null or undefined.");
         return c.json({ error: "Request body is required" }, 400);
       }
 
-      const [stream1, stream2] = rawRequest.body.tee();
-
-      const clonedRequest = new Request(rawRequest, { body: stream1 });
-
-      return slackApp.run(clonedRequest, c.executionCtx);
+      return slackApp.run(request, c.executionCtx);
     });
 
     server.onError((err, c) => {
