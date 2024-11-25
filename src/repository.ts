@@ -125,4 +125,31 @@ export class Repository {
       .set({ sent_count: 0, received_count: 0 })
       .execute();
   }
+
+  /**
+   * @desc 현재 시즌 데이터를 아카이브
+   */
+  async archiveSeason() {
+    await this.db
+      .insertInto("emoji_season_archive")
+      .columns(["season_id", "user_id", "sent_count", "received_count"])
+      .expression(
+        this.db
+          .selectFrom("emoji_season")
+          .select(["season_id", "user_id", "sent_count", "received_count"])
+      )
+      .execute();
+
+    await this.db.deleteFrom("emoji_season").execute();
+
+    const seasonId = await this.getCurrentSeasonId();
+    const endDate = new Date().toISOString().split("T")[0];
+    await this.db
+      .updateTable("season_info")
+      .set({ end_date: endDate })
+      .where("id", "=", seasonId)
+      .execute();
+
+    await this.createSeason();
+  }
 }
