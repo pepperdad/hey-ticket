@@ -59,4 +59,16 @@ export default {
 
     return server.fetch(request, env, ctx);
   },
+
+  async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
+    const db = new Kysely<Database>({
+      dialect: new D1Dialect({
+        database: env.DB,
+      }),
+    });
+
+    const repository = new Repository(db, env.DAILY_LIMIT);
+
+    await repository.resetEmojiDaily();
+  },
 };

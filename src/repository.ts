@@ -53,4 +53,11 @@ export class Repository {
 
     return { success: true, sent_count: count, remaining_quota: quota - count };
   }
+
+  async resetEmojiDaily() {
+    await this.db
+      .updateTable("emoji_daily")
+      .set({ sent_count: 0, received_count: 0 })
+      .execute();
+  }
 }
