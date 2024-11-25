@@ -66,25 +66,26 @@ export class Repository {
     }
     count = Math.min(quota, count);
 
-    // daily 테이블에 추가
-    await this.db
-      .insertInto("emoji_daily")
-      .values({ user_id: giver, sent_count: count, received_count: 0 })
-      .onConflict((oc) =>
-        oc
-          .column("user_id")
-          .doUpdateSet({ sent_count: sql`sent_count + ${count}` })
-      )
-      .execute();
-    await this.db
-      .insertInto("emoji_daily")
-      .values({ user_id: receiver, sent_count: 0, received_count: count })
-      .onConflict((oc) =>
-        oc.column("user_id").doUpdateSet({
-          received_count: sql`received_count + ${count}`,
-        })
-      )
-      .execute();
+    await Promise.all([
+      this.db
+        .insertInto("emoji_daily")
+        .values({ user_id: giver, sent_count: count, received_count: 0 })
+        .onConflict((oc) =>
+          oc
+            .column("user_id")
+            .doUpdateSet({ sent_count: sql`sent_count + ${count}` })
+        )
+        .execute(),
+      this.db
+        .insertInto("emoji_daily")
+        .values({ user_id: receiver, sent_count: 0, received_count: count })
+        .onConflict((oc) =>
+          oc.column("user_id").doUpdateSet({
+            received_count: sql`received_count + ${count}`,
+          })
+        )
+        .execute(),
+    ]);
 
     return { success: true, sent_count: count, remaining_quota: quota - count };
   }
