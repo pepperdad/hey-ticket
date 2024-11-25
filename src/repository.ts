@@ -64,30 +64,43 @@ export class Repository {
     if (quota === 0) {
       return { suceess: false };
     }
-    count = Math.min(quota, count);
+
+    const availableEmojicount = Math.min(quota, count);
 
     await Promise.all([
       this.db
         .insertInto("emoji_daily")
-        .values({ user_id: giver, sent_count: count, received_count: 0 })
+        .values({
+          user_id: giver,
+          sent_count: availableEmojicount,
+          received_count: 0,
+        })
         .onConflict((oc) =>
-          oc
-            .column("user_id")
-            .doUpdateSet({ sent_count: sql`sent_count + ${count}` })
+          oc.column("user_id").doUpdateSet({
+            sent_count: sql`sent_count + ${availableEmojicount}`,
+          })
         )
         .execute(),
       this.db
         .insertInto("emoji_daily")
-        .values({ user_id: receiver, sent_count: 0, received_count: count })
+        .values({
+          user_id: receiver,
+          sent_count: 0,
+          received_count: availableEmojicount,
+        })
         .onConflict((oc) =>
           oc.column("user_id").doUpdateSet({
-            received_count: sql`received_count + ${count}`,
+            received_count: sql`received_count + ${availableEmojicount}`,
           })
         )
         .execute(),
     ]);
 
-    return { success: true, sent_count: count, remaining_quota: quota - count };
+    return {
+      success: true,
+      sent_count: availableEmojicount,
+      remaining_quota: quota - availableEmojicount,
+    };
   }
 
   async resetDailyEmoji() {
