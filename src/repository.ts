@@ -1,4 +1,5 @@
 import { Kysely, sql } from "kysely";
+import pLimit from "p-limit";
 
 export class Repository {
   private db: Kysely<Database>;
@@ -103,25 +104,31 @@ export class Repository {
 
     const seasonId = await this.getCurrentSeasonId();
 
-    for (const record of dailyData) {
-      const { user_id, sent_count, received_count } = record;
+    const limit = pLimit(10); // 최대 10개씩 처리
 
-      await this.db
-        .insertInto("emoji_season")
-        .values({
-          season_id: seasonId,
-          user_id: user_id,
-          sent_count: sent_count,
-          received_count: received_count,
-        })
-        .onConflict((oc) =>
-          oc.doUpdateSet({
-            sent_count: sql`sent_count + ${sent_count}`,
-            received_count: sql`received_count + ${received_count}`,
+    const updateDailyDatas = dailyData.map((data) =>
+      limit(async () => {
+        const { user_id, sent_count, received_count } = data;
+
+        await this.db
+          .insertInto("emoji_season")
+          .values({
+            season_id: seasonId,
+            user_id: user_id,
+            sent_count: sent_count,
+            received_count: received_count,
           })
-        )
-        .execute();
-    }
+          .onConflict((oc) =>
+            oc.doUpdateSet({
+              sent_count: sql`sent_count + ${sent_count}`,
+              received_count: sql`received_count + ${received_count}`,
+            })
+          )
+          .execute();
+      })
+    );
+
+    await Promise.all(updateDailyDatas);
   }
 
   /**
