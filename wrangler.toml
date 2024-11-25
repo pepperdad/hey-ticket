@@ -3,5 +3,14 @@ name = "hey-ticket"
 main = "src/index.ts"
 compatibility_date = "2024-11-12"
 
+[observability]
+enabled = true
+
 [vars]
 EMOJI = ":admission_tickets:"
+DAILY_LIMIT = 5
+
+[[ d1_databases ]]
+binding = "DB" 
+database_name = "hey-ticket-db"
+database_id = "b3d3c649-0618-4fc5-be2a-274e32e84c2c"
