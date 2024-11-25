@@ -69,6 +69,7 @@ export default {
 
     const repository = new Repository(db, env.DAILY_LIMIT);
 
-    await repository.resetEmojiDaily();
+    await repository.updateDailyEmoji();
+    await repository.resetDailyEmoji();
   },
 };

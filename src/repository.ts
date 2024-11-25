@@ -85,45 +85,43 @@ export class Repository {
       )
       .execute();
 
-    // season 테이블에 추가
-    const seasonId = await this.getCurrentSeasonId();
-    await this.db
-      .insertInto("emoji_season")
-      .values({
-        season_id: seasonId,
-        user_id: giver,
-        sent_count: count,
-        received_count: 0,
-      })
-      .onConflict((oc) =>
-        oc
-          .columns(["season_id", "user_id"])
-          .doUpdateSet({ sent_count: sql`sent_count + ${count}` })
-      )
-      .execute();
-    await this.db
-      .insertInto("emoji_season")
-      .values({
-        season_id: seasonId,
-        user_id: receiver,
-        sent_count: 0,
-        received_count: count,
-      })
-      .onConflict((oc) =>
-        oc
-          .columns(["season_id", "user_id"])
-          .doUpdateSet({ received_count: sql`received_count + ${count}` })
-      )
-      .execute();
-
     return { success: true, sent_count: count, remaining_quota: quota - count };
   }
 
-  async resetEmojiDaily() {
+  async resetDailyEmoji() {
     await this.db
       .updateTable("emoji_daily")
       .set({ sent_count: 0, received_count: 0 })
       .execute();
+  }
+
+  async updateDailyEmoji() {
+    const dailyData = await this.db
+      .selectFrom("emoji_daily")
+      .select(["user_id", "sent_count", "received_count"])
+      .execute();
+
+    const seasonId = await this.getCurrentSeasonId();
+
+    for (const record of dailyData) {
+      const { user_id, sent_count, received_count } = record;
+
+      await this.db
+        .insertInto("emoji_season")
+        .values({
+          season_id: seasonId,
+          user_id: user_id,
+          sent_count: sent_count,
+          received_count: received_count,
+        })
+        .onConflict((oc) =>
+          oc.doUpdateSet({
+            sent_count: sql`sent_count + ${sent_count}`,
+            received_count: sql`received_count + ${received_count}`,
+          })
+        )
+        .execute();
+    }
   }
 
   /**
