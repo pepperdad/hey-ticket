@@ -16,4 +16,4 @@ database_name = "hey-ticket-db"
 database_id = "b3d3c649-0618-4fc5-be2a-274e32e84c2c"
 
 [triggers]
-crons = ["0 0 * * *"]
+crons = ["0 15 * * *"] # UTC+9
