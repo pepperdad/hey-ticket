@@ -1,10 +1,17 @@
 import { Hono } from "hono";
-import { SlackApp, SlackEdgeAppEnv } from "slack-cloudflare-workers";
+import { SlackApp } from "slack-cloudflare-workers";
+import { SlackMessageService } from "./service";
+
+interface Env {
+  SLACK_SIGNING_SECRET: string;
+  SLACK_BOT_TOKEN: string;
+  EMOJI: string;
+}
 
 export default {
   async fetch(
     request: Request,
-    env: SlackEdgeAppEnv,
+    env: Env,
     ctx: ExecutionContext
   ): Promise<Response> {
     const slackApp = new SlackApp({
@@ -16,32 +23,18 @@ export default {
 
     const server = new Hono();
 
+    const service = new SlackMessageService(slackApp.client, env.EMOJI);
+
     slackApp.event("message", async ({ context, payload }) => {
       if (payload.subtype === undefined) {
-        const { channel, user, thread_ts } = payload;
+        const { channel, user, text, thread_ts } = payload;
 
-        if (thread_ts) {
-          await context.client.chat.postEphemeral({
-            channel,
-            text: `<@${payload.user}>! 스레드 메시지를 받았습니다.`,
-            user,
-            thread_ts,
-          });
-        } else {
-          const messageText = payload.text;
-          if (messageText) {
-            await context.client.chat.postEphemeral({
-              channel,
-              text: `<@${payload.user}>! 채널 메시지를 받았습니다.`,
-              user,
-            });
-          }
-        }
+        await service.handleMessage(channel, text, user, thread_ts);
       }
     });
 
     server.all("/*", async (c) => {
-      console.log("log in", c);
+      console.log("log in", c.req.json());
       const rawRequest = c.req.raw;
 
       if (!rawRequest.body) {
