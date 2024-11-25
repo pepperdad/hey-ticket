@@ -96,10 +96,21 @@ export class Repository {
         .execute(),
     ]);
 
+    const seasonId = await this.getCurrentSeasonId();
+    const seasonData = await this.db
+      .selectFrom("emoji_season")
+      .select("received_count")
+      .where("season_id", "=", seasonId)
+      .where("user_id", "=", receiver)
+      .executeTakeFirst();
+
+    const seasonReceivedCount = seasonData?.received_count || 0;
+
     return {
       success: true,
-      sent_count: availableEmojicount,
+      count: availableEmojicount,
       remaining_quota: quota - availableEmojicount,
+      season_received_count: seasonReceivedCount + availableEmojicount,
     };
   }
 

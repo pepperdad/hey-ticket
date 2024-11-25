@@ -24,7 +24,7 @@ export class SlackMessageService {
   ) {
     if (!text.includes(this.emoji)) return;
 
-    const count = countEmojis(text, this.emoji);
+    const emojiCount = countEmojis(text, this.emoji);
 
     const users = extractUniqueMentionedUsers(text);
     if (users.length === 0) return;
@@ -32,8 +32,8 @@ export class SlackMessageService {
     for (const mentionedUser of users) {
       if (user === mentionedUser) continue;
 
-      const { success, sent_count, remaining_quota } =
-        await this.repository.sent(user, mentionedUser, count);
+      const { success, count, remaining_quota, season_received_count } =
+        await this.repository.sent(user, mentionedUser, emojiCount);
 
       if (!success) {
         await this.client.chat.postEphemeral({
@@ -45,18 +45,24 @@ export class SlackMessageService {
         return;
       }
 
-      await this.client.chat.postEphemeral({
-        channel,
-        text: `<@${mentionedUser}>님에게 ${this.emoji}를 ${sent_count}개 보냈어요! 오늘 남은${this.emoji}는 ${remaining_quota}개에요.`,
-        user,
-        thread_ts,
-      });
-      await this.client.chat.postEphemeral({
-        channel,
-        text: `<@${user}>님으로부터 ${this.emoji}를 ${sent_count}개 받았어요!`,
-        user: mentionedUser,
-        thread_ts,
-      });
+      Promise.all([
+        await this.client.chat.postEphemeral({
+          channel,
+          text: `<@${mentionedUser}>님에게 ${this.emoji}를 ${count}개 보냈어요! 오늘 남은${this.emoji}는 ${remaining_quota}개에요.`,
+          user,
+          thread_ts,
+        }),
+        await this.client.chat.postEphemeral({
+          channel,
+          text: `<@${user}>님으로부터 ${this.emoji}를 ${count}개 받았어요!`,
+          user: mentionedUser,
+          thread_ts,
+        }),
+        await this.client.chat.postMessage({
+          channel: mentionedUser,
+          text: `<@${user}>님으로부터 ${this.emoji}를 ${count}개 받았어요! 지금까지 총 ${season_received_count}개 받았어요.`,
+        }),
+      ]);
     }
   }
 }
