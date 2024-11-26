@@ -33,7 +33,12 @@ export default {
       env.EMOJI,
       repository
     );
-    const home = new Home(slackApp.client, repository);
+    const home = new Home(
+      slackApp.client,
+      repository,
+      env.EMOJI,
+      +env.DAILY_LIMIT
+    );
 
     slackApp
       .event("message", async ({ payload }) => {
