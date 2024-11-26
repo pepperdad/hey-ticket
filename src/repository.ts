@@ -183,9 +183,7 @@ export class Repository {
     await this.createSeason();
   }
 
-  async getSeasonRanking(nowSeason: boolean, season?: number) {
-    const tableName = nowSeason ? "emoji_season" : "emoji_season_archive";
-
+  async getSeasonRanking(nowSeason: boolean, season?: number, userId?: string) {
     const sentQuery = nowSeason
       ? this.db
           .selectFrom("emoji_daily")
@@ -201,11 +199,13 @@ export class Repository {
             ),
           ])
           .orderBy("total", "desc")
+          .limit(5)
       : this.db
           .selectFrom("emoji_season_archive")
           .select(["user_id", sql`sent_count`.as("total")])
           .where("season_id", "=", season!)
-          .orderBy("total", "desc");
+          .orderBy("total", "desc")
+          .limit(10);
 
     const receivedQuery = nowSeason
       ? this.db
@@ -222,18 +222,67 @@ export class Repository {
             ),
           ])
           .orderBy("total", "desc")
+          .limit(5)
       : this.db
           .selectFrom("emoji_season_archive")
           .select(["user_id", sql`received_count`.as("total")])
           .where("season_id", "=", season!)
-          .orderBy("total", "desc");
+          .orderBy("total", "desc")
+          .limit(10);
 
-    const [sent, received] = await Promise.all([
+    const userSentQuery = nowSeason
+      ? this.db
+          .selectFrom("emoji_daily")
+          .leftJoin(
+            "emoji_season",
+            "emoji_daily.user_id",
+            "emoji_season.user_id"
+          )
+          .select(
+            sql`COALESCE(emoji_daily.sent_count, 0) + COALESCE(emoji_season.sent_count, 0)`.as(
+              "total"
+            )
+          )
+          .where("emoji_daily.user_id", "=", userId!)
+      : this.db
+          .selectFrom("emoji_season_archive")
+          .select(sql`sent_count`.as("total"))
+          .where("season_id", "=", season!)
+          .where("user_id", "=", userId!);
+
+    const userReceivedQuery = nowSeason
+      ? this.db
+          .selectFrom("emoji_daily")
+          .leftJoin(
+            "emoji_season",
+            "emoji_daily.user_id",
+            "emoji_season.user_id"
+          )
+          .select(
+            sql`COALESCE(emoji_daily.received_count, 0) + COALESCE(emoji_season.received_count, 0)`.as(
+              "total"
+            )
+          )
+          .where("emoji_daily.user_id", "=", userId!)
+      : this.db
+          .selectFrom("emoji_season_archive")
+          .select(sql`received_count`.as("total"))
+          .where("season_id", "=", season!)
+          .where("user_id", "=", userId!);
+
+    const [sent, received, userSent, userReceived] = await Promise.all([
       sentQuery.execute(),
       receivedQuery.execute(),
+      userSentQuery.execute(),
+      userReceivedQuery.execute(),
     ]);
 
-    return { sent, received };
+    return {
+      sent,
+      received,
+      user_sent_count: userSent[0]?.total || 0,
+      user_received_count: userReceived[0]?.total || 0,
+    };
   }
 
   async getTodayRanking() {
@@ -241,38 +290,17 @@ export class Repository {
       .selectFrom("emoji_daily")
       .select(["user_id", sql`sent_count`.as("total")])
       .orderBy("total", "desc")
+      .limit(5)
       .execute();
 
     const received = await this.db
       .selectFrom("emoji_daily")
       .select(["user_id", sql`received_count`.as("total")])
       .orderBy("total", "desc")
+      .limit(5)
       .execute();
 
-    return { sent: sent, received: received };
-  }
-
-  async getUserInfo(userId: string) {
-    const seasonInfo = await this.db
-      .selectFrom("emoji_season")
-      .select(["sent_count", "received_count"])
-      .where("user_id", "=", userId)
-      .executeTakeFirst();
-
-    const dailyInfo = await this.db
-      .selectFrom("emoji_daily")
-      .select(["sent_count", "received_count"])
-      .where("user_id", "=", userId)
-      .executeTakeFirst();
-
-    const remainingQuota = this.dailyLimit - (dailyInfo?.sent_count || 0);
-
-    return {
-      seasonSent: (seasonInfo?.sent_count ?? 0) + (dailyInfo?.sent_count ?? 0),
-      seasonReceived:
-        (seasonInfo?.received_count ?? 0) + (dailyInfo?.received_count ?? 0),
-      dailyRemaining: remainingQuota,
-    };
+    return { sent, received };
   }
 
   async getAllSeasons() {
