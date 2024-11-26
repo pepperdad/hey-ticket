@@ -137,7 +137,7 @@ export class Home {
       {
         type: "section",
         text: MdText(
-          `*${selectedSeasonName}에* ${this.emoji}를 *${user_sent_count}개* 보내고, *${user_received_count}개* 받았어요.`
+          `*${selectedSeasonName}* 에 ${this.emoji}를 *${user_sent_count}개* 보내고, *${user_received_count}개* 받았어요.`
         ),
       }
     );
