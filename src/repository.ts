@@ -182,4 +182,104 @@ export class Repository {
 
     await this.createSeason();
   }
+
+  async getSeasonRanking(nowSeason: boolean, season?: number) {
+    const tableName = nowSeason ? "emoji_season" : "emoji_season_archive";
+
+    const sentQuery = nowSeason
+      ? this.db
+          .selectFrom("emoji_daily")
+          .leftJoin(
+            "emoji_season",
+            "emoji_daily.user_id",
+            "emoji_season.user_id"
+          )
+          .select([
+            "emoji_daily.user_id",
+            sql`COALESCE(emoji_daily.sent_count, 0) + COALESCE(emoji_season.sent_count, 0)`.as(
+              "total"
+            ),
+          ])
+          .orderBy("total", "desc")
+      : this.db
+          .selectFrom("emoji_season_archive")
+          .select(["user_id", sql`sent_count`.as("total")])
+          .where("season_id", "=", season!)
+          .orderBy("total", "desc");
+
+    const receivedQuery = nowSeason
+      ? this.db
+          .selectFrom("emoji_daily")
+          .leftJoin(
+            "emoji_season",
+            "emoji_daily.user_id",
+            "emoji_season.user_id"
+          )
+          .select([
+            "emoji_daily.user_id",
+            sql`COALESCE(emoji_daily.received_count, 0) + COALESCE(emoji_season.received_count, 0)`.as(
+              "total"
+            ),
+          ])
+          .orderBy("total", "desc")
+      : this.db
+          .selectFrom("emoji_season_archive")
+          .select(["user_id", sql`received_count`.as("total")])
+          .where("season_id", "=", season!)
+          .orderBy("total", "desc");
+
+    const [sent, received] = await Promise.all([
+      sentQuery.execute(),
+      receivedQuery.execute(),
+    ]);
+
+    return { sent, received };
+  }
+
+  async getTodayRanking() {
+    const sent = await this.db
+      .selectFrom("emoji_daily")
+      .select(["user_id", sql`sent_count`.as("total")])
+      .orderBy("total", "desc")
+      .execute();
+
+    const received = await this.db
+      .selectFrom("emoji_daily")
+      .select(["user_id", sql`received_count`.as("total")])
+      .orderBy("total", "desc")
+      .execute();
+
+    return { sent: sent, received: received };
+  }
+
+  async getUserInfo(userId: string) {
+    const seasonInfo = await this.db
+      .selectFrom("emoji_season")
+      .select(["sent_count", "received_count"])
+      .where("user_id", "=", userId)
+      .executeTakeFirst();
+
+    const dailyInfo = await this.db
+      .selectFrom("emoji_daily")
+      .select(["sent_count", "received_count"])
+      .where("user_id", "=", userId)
+      .executeTakeFirst();
+
+    const remainingQuota = this.dailyLimit - (dailyInfo?.sent_count || 0);
+
+    return {
+      seasonSent: (seasonInfo?.sent_count ?? 0) + (dailyInfo?.sent_count ?? 0),
+      seasonReceived:
+        (seasonInfo?.received_count ?? 0) + (dailyInfo?.received_count ?? 0),
+      dailyRemaining: remainingQuota,
+    };
+  }
+
+  async getAllSeasons() {
+    return await this.db
+      .selectFrom("season_info")
+      .select(["id", "season_name"])
+      .orderBy("id", "desc")
+      .execute();
+  }
 }
